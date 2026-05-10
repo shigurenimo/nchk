@@ -1,5 +1,5 @@
 {
-  "name": "nchk",
+  "name": "@shigureni/name",
   "type": "module",
   "version": "0.1.0",
   "description": "Allocate your next project name - check availability across npm, GitHub, PyPI, crates.io, and domains",
