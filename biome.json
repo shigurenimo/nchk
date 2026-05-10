@@ -1,0 +1,60 @@
+{
+  "$schema": "node_modules/@biomejs/biome/configuration_schema.json",
+  "formatter": {
+    "indentStyle": "space"
+  },
+  "linter": {
+    "rules": {
+      "recommended": true,
+      "suspicious": {
+        "noThenProperty": "off",
+        "noControlCharactersInRegex": "off"
+      },
+      "performance": {
+        "noBarrelFile": "error"
+      }
+    }
+  },
+  "overrides": [
+    {
+      "includes": [
+        "src/index.ts",
+        "src/open-tui/index.ts",
+        "src/compiler/index.ts",
+        "src/runtime/index.ts"
+      ],
+      "linter": {
+        "rules": {
+          "performance": {
+            "noBarrelFile": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["**/*.test.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noNonNullAssertion": "off"
+          }
+        }
+      }
+    }
+  ],
+  "javascript": {
+    "formatter": {
+      "semicolons": "asNeeded"
+    }
+  },
+  "files": {
+    "includes": [
+      "src/**/*.ts",
+      "src/**/*.tsx",
+      "labs/**/*.ts",
+      "labs/**/*.tsx",
+      "**/*.json",
+      "!dist"
+    ]
+  }
+}

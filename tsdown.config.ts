@@ -1,6 +1,11 @@
-import { defineConfig } from 'tsdown'
+import { defineConfig } from "tsdown"
 
 export default defineConfig({
-  exports: true,
-  // ...config options
+  entry: ["src/index.ts"],
+  format: "esm",
+  clean: true,
+  dts: true,
+  banner: {
+    js: "#!/usr/bin/env node",
+  },
 })

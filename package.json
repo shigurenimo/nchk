@@ -1,25 +1,41 @@
 {
-  "name": "tsdown-starter",
+  "name": "nchk",
   "type": "module",
-  "version": "0.0.0",
-  "private": true,
-  "description": "A simple example library built by tsdown",
-  "exports": {
-    ".": "./dist/index.mjs",
-    "./package.json": "./package.json"
+  "version": "0.1.0",
+  "description": "Allocate your next project name - check availability across npm, GitHub, PyPI, crates.io, and domains",
+  "license": "MIT",
+  "keywords": [
+    "cli",
+    "name",
+    "availability",
+    "checker",
+    "npm",
+    "github",
+    "pypi",
+    "crates",
+    "domain"
+  ],
+  "bin": {
+    "nchk": "./dist/index.mjs"
   },
-  "main": "./dist/index.mjs",
-  "module": "./dist/index.mjs",
-  "types": "./dist/index.d.mts",
   "files": [
     "dist"
   ],
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "build": "tsdown",
-    "dev": "tsdown --watch"
+    "dev": "tsdown --watch",
+    "check": "tsgo --noEmit",
+    "format": "biome check . --fix --unsafe",
+    "test": "bun test",
+    "prepublishOnly": "npm run build"
   },
   "devDependencies": {
-    "tsdown": "^0.18.1",
-    "typescript": "^5.9.3"
+    "@biomejs/biome": "^2.3.11",
+    "@types/node": "^25.0.9",
+    "@typescript/native-preview": "^7.0.0-dev.20260111.1",
+    "tsdown": "^0.18.1"
   }
 }
