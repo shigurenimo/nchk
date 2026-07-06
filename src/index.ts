@@ -5,6 +5,7 @@ import { checkNpm } from "@/checkers/check-npm.js"
 import { checkPypi } from "@/checkers/check-pypi.js"
 import { CLOUDFLARE_TLDS } from "@/data/cloudflare-tlds.js"
 import { cleanupOldEntriesAsync } from "@/lib/cache.js"
+import { runPlain } from "@/lib/run-plain.js"
 import type { ItemTemplate } from "@/ui/interactive.js"
 import { runInteractive } from "@/ui/interactive.js"
 import { parseArgs, printHelp, printVersion } from "@/utils/parse-args.js"
@@ -25,6 +26,15 @@ if (args.showVersion) {
 }
 
 const name = args.name ?? ""
+
+// No TTY (pipe / CI): print results once and exit instead of hanging
+if (!process.stdin.isTTY || !process.stdout.isTTY) {
+  if (name === "") {
+    printHelp()
+    process.exit(1)
+  }
+  process.exit(await runPlain(name))
+}
 
 const templates: ItemTemplate[] = [
   {

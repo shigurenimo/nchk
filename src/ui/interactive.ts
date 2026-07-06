@@ -34,7 +34,8 @@ export type ItemTemplate = {
   getLabel?: (name: string) => string
 }
 
-const VIEW_HEIGHT = 16
+const MAX_VIEW_HEIGHT = 16
+const CHECK_CONCURRENCY = 12
 
 // Colors
 const colors = {
@@ -74,7 +75,12 @@ export async function runInteractive(
   let running = true
   let currentName = projectName
   let lastLineCount = 0
+  let cleanedUp = false
   const checkingSet = new Set<string>()
+  const viewHeight = Math.max(
+    4,
+    Math.min(MAX_VIEW_HEIGHT, (process.stdout.rows ?? 24) - 6),
+  )
 
   function createItems(name: string): ListItem[] {
     // Empty name: show empty table
@@ -159,27 +165,33 @@ export async function runInteractive(
     const displayName = getDisplayName()
 
     // Title
-    const titleWidget = row(
-      text({ fg: colors.gray, pl: 1 }, "Is "),
-      text({ fg: colors.white }, `'${displayName}'`),
-      text({ fg: colors.gray }, " available?"),
-    )
-    lines.push(renderLine(titleWidget))
+    if (displayName === "") {
+      lines.push(
+        renderLine(text({ fg: colors.gray, pl: 1 }, "Type a name to check...")),
+      )
+    } else {
+      const titleWidget = row(
+        text({ fg: colors.gray, pl: 1 }, "Is "),
+        text({ fg: colors.white }, `'${displayName}'`),
+        text({ fg: colors.gray }, " available?"),
+      )
+      lines.push(renderLine(titleWidget))
+    }
 
     // Help
     lines.push(
       renderLine(
         text(
           { fg: colors.gray, pl: 1 },
-          "Up/Down scroll  Enter check  Esc quit",
+          "type name  ↑↓ move  Enter check  Tab check all  Esc quit",
         ),
       ),
     )
 
     // Calculate visible range
-    const visibleItems = items.slice(scrollOffset, scrollOffset + VIEW_HEIGHT)
+    const visibleItems = items.slice(scrollOffset, scrollOffset + viewHeight)
 
-    for (let i = 0; i < VIEW_HEIGHT; i++) {
+    for (let i = 0; i < viewHeight; i++) {
       const item = visibleItems[i]
       if (!item) {
         lines.push("")
@@ -216,15 +228,13 @@ export async function runInteractive(
     }
 
     // Show scroll indicator
-    if (items.length > VIEW_HEIGHT) {
-      const pos = Math.round(
-        (scrollOffset / (items.length - VIEW_HEIGHT)) * 100,
-      )
+    if (items.length > viewHeight) {
+      const pos = Math.round((scrollOffset / (items.length - viewHeight)) * 100)
       lines.push(
         renderLine(
           text(
             { fg: colors.gray },
-            `  ${scrollOffset + 1}-${Math.min(scrollOffset + VIEW_HEIGHT, items.length)}/${items.length} (${pos}%)`,
+            `  ${scrollOffset + 1}-${Math.min(scrollOffset + viewHeight, items.length)}/${items.length} (${pos}%)`,
           ),
         ),
       )
@@ -236,15 +246,17 @@ export async function runInteractive(
   function renderUI(): void {
     const lines = buildLines()
 
-    // Move cursor up to overwrite previous output
+    // Single write to avoid flicker; clear below in case the new frame
+    // has fewer lines than the previous one
+    let out = ""
     if (lastLineCount > 0) {
-      process.stdout.write(`\x1b[${lastLineCount}A`)
+      out += `\x1b[${lastLineCount}A`
     }
-
-    // Clear and write each line
     for (const line of lines) {
-      process.stdout.write(`\x1b[2K${line}\n`)
+      out += `\x1b[2K${line}\n`
     }
+    out += "\x1b[0J"
+    process.stdout.write(out)
 
     lastLineCount = lines.length
   }
@@ -259,26 +271,67 @@ export async function runInteractive(
     if (cursor < scrollOffset) {
       scrollOffset = cursor
     }
-    if (cursor >= scrollOffset + VIEW_HEIGHT) {
-      scrollOffset = cursor - VIEW_HEIGHT + 1
+    if (cursor >= scrollOffset + viewHeight) {
+      scrollOffset = cursor - viewHeight + 1
     }
   }
 
-  async function checkCurrent(): Promise<void> {
-    const items = getDisplayItems()
-    if (items.length === 0) return
-
-    const item = items[cursor]
+  async function checkItem(item: ListItem): Promise<void> {
     const checkKey = `${item.platform}:${item.name}`
     if (checkingSet.has(checkKey)) return
 
     checkingSet.add(checkKey)
     renderUI()
 
-    const result = await item.check()
-    checkingSet.delete(checkKey)
-    setCache(result)
+    try {
+      const result = await item.check()
+      setCache(result)
+    } finally {
+      checkingSet.delete(checkKey)
+    }
     renderUI()
+  }
+
+  async function checkCurrent(): Promise<void> {
+    const items = getDisplayItems()
+    const item = items[cursor]
+    if (!item) return
+    await checkItem(item)
+  }
+
+  async function checkAll(): Promise<void> {
+    const queue = getDisplayItems().filter(
+      (item) => item.status === "pending" || item.status === "error",
+    )
+    if (queue.length === 0) return
+
+    for (const item of queue) {
+      checkingSet.add(`${item.platform}:${item.name}`)
+    }
+    renderUI()
+
+    let nextIndex = 0
+    const worker = async (): Promise<void> => {
+      while (nextIndex < queue.length) {
+        const item = queue[nextIndex]
+        nextIndex += 1
+        if (!item) continue
+        const checkKey = `${item.platform}:${item.name}`
+        try {
+          const result = await item.check()
+          setCache(result)
+        } finally {
+          checkingSet.delete(checkKey)
+        }
+        renderUI()
+      }
+    }
+
+    const workers: Promise<void>[] = []
+    for (let i = 0; i < CHECK_CONCURRENCY; i++) {
+      workers.push(worker())
+    }
+    await Promise.all(workers)
   }
 
   function handleKey(key: {
@@ -329,9 +382,33 @@ export async function runInteractive(
       return
     }
 
+    if (key.name === "pageup") {
+      if (items.length > 0) {
+        cursor = Math.max(0, cursor - viewHeight)
+        adjustScroll()
+        renderUI()
+      }
+      return
+    }
+
+    if (key.name === "pagedown") {
+      if (items.length > 0) {
+        cursor = Math.min(items.length - 1, cursor + viewHeight)
+        adjustScroll()
+        renderUI()
+      }
+      return
+    }
+
     // Enter - check current item
     if (key.name === "return") {
-      checkCurrent()
+      checkCurrent().catch(() => {})
+      return
+    }
+
+    // Tab - check all unchecked items in the current list
+    if (key.name === "tab") {
+      checkAll().catch(() => {})
       return
     }
 
@@ -349,16 +426,20 @@ export async function runInteractive(
   }
 
   function cleanup(): void {
+    // Runs both on quit keys and the process "exit" event; a second run
+    // would erase unrelated terminal content above the prompt
+    if (cleanedUp) return
+    cleanedUp = true
+
     // Clear output
     if (lastLineCount > 0) {
-      process.stdout.write(`\x1b[${lastLineCount}A`)
-      for (let i = 0; i < lastLineCount; i++) {
-        process.stdout.write("\x1b[2K\n")
-      }
-      process.stdout.write(`\x1b[${lastLineCount}A`)
+      process.stdout.write(`\x1b[${lastLineCount}A\x1b[0J`)
+      lastLineCount = 0
     }
     showCursor()
     disableRawMode()
+    // Without pause() the resumed stdin keeps the event loop alive forever
+    process.stdin.pause()
   }
 
   // Setup

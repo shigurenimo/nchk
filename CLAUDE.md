@@ -13,24 +13,25 @@ bun src <name>    # 直接指定
 
 ## 操作方法
 
-- ↑↓ / j/k: 項目を選択
-- Enter / Z: 選択した項目をチェック
-- /: 検索モード (TLD を絞り込み)
-- Esc: 検索解除
-- Q: 終了
+- 文字入力 / Backspace: 名前を編集 (".xx" と入力するとドメインを TLD 前方一致で絞り込み)
+- ↑↓ / PgUp/PgDn: 項目を選択
+- Enter: 選択した項目をチェック
+- Tab: 表示中の未チェック項目をすべてチェック (並列実行)
+- Esc / Ctrl+C: 終了
+
+非 TTY (パイプや CI) では対話モードに入らず、主要レジストリと代表的な TLD を一括チェックして標準出力に結果を表示する。
 
 ## チェック対象
 
 - npm: registry.npmjs.org
 - GitHub User: api.github.com/users
-- GitHub Repo: api.github.com/repos (同名user/repo)
 - PyPI: pypi.org
 - crates.io: Rust パッケージレジストリ
-- ドメイン: Cloudflare Registrar で購入可能な全 TLD (DNS解決)
+- ドメイン: Cloudflare Registrar で購入可能な全 TLD (NS レコードの DNS 解決)
 
 ## キャッシュ
 
-結果は ~/.config/nalloc/cache.json にキャッシュされる (24時間有効)
+結果は ~/.config/nchk/cache.json にキャッシュされる (8時間有効、2日で削除)
 
 ## ディレクトリ構成
 

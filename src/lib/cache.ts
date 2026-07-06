@@ -24,19 +24,27 @@ function ensureCacheDir(): void {
   }
 }
 
+// In-memory copy: getCached runs per item per render, so hitting the
+// filesystem every call is too slow
+let memo: CacheData | null = null
+
 function loadCache(): CacheData {
+  if (memo) return memo
   try {
     if (fs.existsSync(CACHE_FILE)) {
       const data = fs.readFileSync(CACHE_FILE, "utf-8")
-      return JSON.parse(data)
+      memo = JSON.parse(data)
+      return memo ?? {}
     }
   } catch {
     // Ignore errors, return empty cache
   }
-  return {}
+  memo = {}
+  return memo
 }
 
 function saveCache(data: CacheData): void {
+  memo = data
   ensureCacheDir()
   fs.writeFileSync(CACHE_FILE, JSON.stringify(data, null, 2))
 }
@@ -76,6 +84,7 @@ export function setCache(result: CheckResult): void {
 }
 
 export function clearCache(): void {
+  memo = null
   if (fs.existsSync(CACHE_FILE)) {
     fs.unlinkSync(CACHE_FILE)
   }
